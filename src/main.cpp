@@ -3,6 +3,7 @@
 #include <sstream>
 #include "lexer.h"
 #include "parser.h"
+#include "codegen.h"
 
 using namespace csimple;
 
@@ -58,6 +59,10 @@ int main(int argc, char **argv) {
         auto stmts = P.parseProgram();
         std::cout << "--- AST ---\n";
         for (auto &s : stmts) std::cout << s->toString() << "\n";
+        // generate C code
+        Codegen cg;
+        std::string csrc = cg.generate(stmts);
+        std::cout << "--- C ---\n" << csrc;
     } catch (const std::exception &ex) {
         std::cerr << "Parse error: " << ex.what() << "\n";
         return 2;
