@@ -47,6 +47,23 @@ std::string Codegen::genStmt(const Stmt *s) {
         return ss.str();
     }
     if (auto es = dynamic_cast<const ExprStmt*>(s)) {
+        // builtin: print(...)
+        if (auto ce = dynamic_cast<const CallExpr*>(es->expr.get())) {
+            if (ce->callee == "print") {
+                std::ostringstream ss;
+                ss << "{ char _buf[1024]; int _pos = 0; ";
+                for (size_t i = 0; i < ce->args.size(); ++i) {
+                    if (i == 0) {
+                        ss << "_pos += snprintf(_buf + _pos, sizeof(_buf) - _pos, \"%d\", " << genExpr(ce->args[i].get()) << "); ";
+                    } else {
+                        ss << "_pos += snprintf(_buf + _pos, sizeof(_buf) - _pos, \" %d\", " << genExpr(ce->args[i].get()) << "); ";
+                    }
+                }
+                ss << "puts(_buf); }";
+                return ss.str();
+            }
+        }
+
         std::ostringstream ss;
         ss << genExpr(es->expr.get()) << ";";
         return ss.str();

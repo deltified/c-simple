@@ -5,4 +5,4 @@ fn add(a, b):
 
 let a = 1
 let b = 2
-add(a, b)
+print(1, 2, add(a, b))
