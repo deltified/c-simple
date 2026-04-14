@@ -21,6 +21,12 @@ static std::string getTokenTypeStr(TokenType t) {
         case TokenType::TK_NUMBER: return "NUMBER";
         case TokenType::TK_IDENT: return "IDENT";
         case TokenType::TK_LET: return "LET";
+        case TokenType::TK_FN: return "FN";
+        case TokenType::TK_RETURN: return "RETURN";
+        case TokenType::TK_COLON: return "COLON";
+        case TokenType::TK_COMMA: return "COMMA";
+        case TokenType::TK_INDENT: return "INDENT";
+        case TokenType::TK_DEDENT: return "DEDENT";
         case TokenType::TK_EQ: return "EQ";
         case TokenType::TK_PLUS: return "PLUS";
         case TokenType::TK_MINUS: return "MINUS";

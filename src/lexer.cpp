@@ -1,6 +1,7 @@
 #include "lexer.h"
 #include <cctype>
 #include <cstdlib>
+#include <deque>
 
 namespace csimple {
 
@@ -65,47 +66,94 @@ Token Lexer::lexIdent() {
     t.value = lex;
     t.line = line;
     if (lex == "let") t.type = TokenType::TK_LET;
+    else if (lex == "fn") t.type = TokenType::TK_FN;
+    else if (lex == "return") t.type = TokenType::TK_RETURN;
     else t.type = TokenType::TK_IDENT;
     return t;
 }
 
 Token Lexer::next() {
-    while(true) {
-        if (idx >= src.size()) return Token{TokenType::TK_EOF, "", "", line};
-        char c = peek();
-
-        if (c == '\n') {
-            get();
-            ++line;
-            return Token{TokenType::TK_NEWLINE, "\n", "", line - 1};
-        }
-
-        if (c == ' ' || c == '\t' || c == '\r') {
-            skipWhitespace();
-            continue;
-        }
-
-        if (std::isdigit((unsigned char)c)) return lexNumber();
-
-        if (std::isalpha((unsigned char)c) || c == '_') return lexIdent();
-
-        // single-char tokens
-        get();
-        Token t;
-        t.lexeme = std::string(1, c);
-        t.value = t.lexeme;
-        t.line = line;
-        switch (c) {
-            case '+': t.type = TokenType::TK_PLUS; return t;
-            case '-': t.type = TokenType::TK_MINUS; return t;
-            case '*': t.type = TokenType::TK_MUL; return t;
-            case '/': t.type = TokenType::TK_DIV; return t;
-            case '(' : t.type = TokenType::TK_LPAREN; return t;
-            case ')' : t.type = TokenType::TK_RPAREN; return t;
-            case '=' : t.type = TokenType::TK_EQ; return t;
-            default: t.type = TokenType::TK_UNKNOWN; return t;
-        }
+    if (!pending.empty()) {
+        Token t = pending.front(); pending.pop_front();
+        return t;
     }
+
+    if (idx >= src.size()) {
+        // at EOF, unwind any remaining indents
+        while (indents.size() > 1) {
+            indents.pop_back();
+            pending.push_back(Token{TokenType::TK_DEDENT, "", "", line});
+        }
+        if (!pending.empty()) { Token t = pending.front(); pending.pop_front(); return t; }
+        return Token{TokenType::TK_EOF, "", "", line};
+    }
+
+    char c = peek();
+
+    // handle newline + emit INDENT/DEDENT as needed
+    if (c == '\n') {
+        get();
+        ++line;
+        // count indentation spaces/tabs
+        int count = 0;
+        while (true) {
+            char nc = peek();
+            if (nc == ' ') { ++count; get(); continue; }
+            if (nc == '\t') { count += 4; get(); continue; }
+            break;
+        }
+        // ignore empty lines
+        char after = peek();
+        if (after == '\n' || after == '\0') {
+            // push a simple NEWLINE token and return it
+            pending.push_back(Token{TokenType::TK_NEWLINE, "\n", "", line - 1});
+            Token t = pending.front(); pending.pop_front();
+            return t;
+        }
+
+        pending.push_back(Token{TokenType::TK_NEWLINE, "\n", "", line - 1});
+        int curIndent = indents.back();
+        if (count > curIndent) {
+            indents.push_back(count);
+            pending.push_back(Token{TokenType::TK_INDENT, "", "", line});
+        } else if (count < curIndent) {
+            while (indents.size() > 1 && count < indents.back()) {
+                indents.pop_back();
+                pending.push_back(Token{TokenType::TK_DEDENT, "", "", line});
+            }
+        }
+        Token t = pending.front(); pending.pop_front();
+        return t;
+    }
+
+    // skip whitespace (spaces/tabs) between tokens
+    if (c == ' ' || c == '\t' || c == '\r') {
+        skipWhitespace();
+        return next();
+    }
+
+    if (std::isdigit((unsigned char)c)) return lexNumber();
+    if (std::isalpha((unsigned char)c) || c == '_') return lexIdent();
+
+    // single-char tokens
+    get();
+    Token t;
+    t.lexeme = std::string(1, c);
+    t.value = t.lexeme;
+    t.line = line;
+    switch (c) {
+        case '+': t.type = TokenType::TK_PLUS; return t;
+        case '-': t.type = TokenType::TK_MINUS; return t;
+        case '*': t.type = TokenType::TK_MUL; return t;
+        case '/': t.type = TokenType::TK_DIV; return t;
+        case '(' : t.type = TokenType::TK_LPAREN; return t;
+        case ')' : t.type = TokenType::TK_RPAREN; return t;
+        case '=' : t.type = TokenType::TK_EQ; return t;
+        case ':' : t.type = TokenType::TK_COLON; return t;
+        case ',' : t.type = TokenType::TK_COMMA; return t;
+        default: t.type = TokenType::TK_UNKNOWN; return t;
+    }
+    // unreachable
 }
 
 } 

@@ -31,6 +31,26 @@ ExprStmt::ExprStmt(ExprPtr e) : expr(std::move(e)) {}
 
 std::string ExprStmt::toString() const { return expr->toString(); }
 
+ReturnStmt::ReturnStmt(ExprPtr e) : expr(std::move(e)) {}
+
+std::string ReturnStmt::toString() const { return std::string("(return ") + expr->toString() + ")"; }
+
+FunctionStmt::FunctionStmt(std::string n, std::vector<std::string> p, std::vector<StmtPtr> b)
+    : name(std::move(n)), params(std::move(p)), body(std::move(b)) {}
+
+std::string FunctionStmt::toString() const {
+    std::ostringstream ss;
+    ss << "(fn " << name << " (";
+    for (size_t i = 0; i < params.size(); ++i) {
+        if (i) ss << " ";
+        ss << params[i];
+    }
+    ss << ") ";
+    for (auto &s : body) ss << s->toString() << " ";
+    ss << ")";
+    return ss.str();
+}
+
 // Parser
 
 Parser::Parser(const std::string &source) : L(source) {
@@ -87,9 +107,49 @@ StmtPtr Parser::parseStatement() {
         ExprPtr e = parseExpression();
         return std::make_unique<LetStmt>(name, std::move(e));
     }
+    if (cur.type == TokenType::TK_FN) {
+        advance();
+        if (cur.type != TokenType::TK_IDENT) throw std::runtime_error("expected function name after fn");
+        std::string name = cur.lexeme;
+        advance();
+        expect(TokenType::TK_LPAREN, "expected '('");
+        std::vector<std::string> params;
+        if (cur.type != TokenType::TK_RPAREN) {
+            while (true) {
+                if (cur.type != TokenType::TK_IDENT) throw std::runtime_error("expected parameter name");
+                params.push_back(cur.lexeme);
+                advance();
+                if (cur.type == TokenType::TK_COMMA) { advance(); continue; }
+                break;
+            }
+        }
+        expect(TokenType::TK_RPAREN, "expected ')'");
+        expect(TokenType::TK_COLON, "expected ':' after function signature");
+        // require newline then indented block
+        expect(TokenType::TK_NEWLINE, "expected newline after ':'");
+        std::vector<StmtPtr> body = parseBlock();
+        return std::make_unique<FunctionStmt>(name, std::move(params), std::move(body));
+    }
+    if (cur.type == TokenType::TK_RETURN) {
+        advance();
+        ExprPtr e = parseExpression();
+        return std::make_unique<ReturnStmt>(std::move(e));
+    }
     // otherwise expression statement
     ExprPtr e = parseExpression();
     return std::make_unique<ExprStmt>(std::move(e));
+}
+
+std::vector<StmtPtr> Parser::parseBlock() {
+    std::vector<StmtPtr> out;
+    expect(TokenType::TK_INDENT, "expected indent");
+    while (cur.type != TokenType::TK_DEDENT && cur.type != TokenType::TK_EOF) {
+        if (cur.type == TokenType::TK_NEWLINE) { advance(); continue; }
+        out.push_back(parseStatement());
+        while (acceptNewline()) {}
+    }
+    expect(TokenType::TK_DEDENT, "expected dedent");
+    return out;
 }
 
 ExprPtr Parser::parseExpression() {

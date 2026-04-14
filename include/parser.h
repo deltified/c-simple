@@ -54,6 +54,20 @@ struct ExprStmt : Stmt {
     std::string toString() const override;
 };
 
+struct ReturnStmt : Stmt {
+    ExprPtr expr;
+    explicit ReturnStmt(ExprPtr e);
+    std::string toString() const override;
+};
+
+struct FunctionStmt : Stmt {
+    std::string name;
+    std::vector<std::string> params;
+    std::vector<StmtPtr> body;
+    FunctionStmt(std::string n, std::vector<std::string> p, std::vector<StmtPtr> b);
+    std::string toString() const override;
+};
+
 class Parser {
 public:
     explicit Parser(const std::string &source);
@@ -69,6 +83,7 @@ private:
     void expect(TokenType t, const char *msg="unexpected token");
 
     StmtPtr parseStatement();
+    std::vector<StmtPtr> parseBlock();
     ExprPtr parseExpression();
     ExprPtr parseTerm();
     ExprPtr parseFactor();
