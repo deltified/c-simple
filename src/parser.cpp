@@ -23,13 +23,20 @@ std::string CallExpr::toString() const {
     return ss.str();
 }
 
-BinaryExpr::BinaryExpr(char o, ExprPtr l, ExprPtr r)
-    : op(o), left(std::move(l)), right(std::move(r)) {}
+BinaryExpr::BinaryExpr(std::string o, ExprPtr l, ExprPtr r)
+    : op(std::move(o)), left(std::move(l)), right(std::move(r)) {}
 
 std::string BinaryExpr::toString() const {
     std::ostringstream ss;
     ss << "(" << op << " " << left->toString() << " " << right->toString() << ")";
     return ss.str();
+}
+
+UnaryExpr::UnaryExpr(std::string o, ExprPtr x)
+    : op(std::move(o)), operand(std::move(x)) {}
+
+std::string UnaryExpr::toString() const {
+    return std::string("(") + op + " " + operand->toString() + ")";
 }
 
 LetStmt::LetStmt(std::string n, ExprPtr e) : name(std::move(n)), expr(std::move(e)) {}
@@ -60,6 +67,29 @@ std::string FunctionStmt::toString() const {
     }
     ss << ") ";
     for (auto &s : body) ss << s->toString() << " ";
+    ss << ")";
+    return ss.str();
+}
+
+IfBranch::IfBranch(ExprPtr c, std::vector<StmtPtr> b)
+    : cond(std::move(c)), body(std::move(b)) {}
+
+IfStmt::IfStmt(std::vector<IfBranch> b, std::vector<StmtPtr> e)
+    : branches(std::move(b)), elseBody(std::move(e)) {}
+
+std::string IfStmt::toString() const {
+    std::ostringstream ss;
+    ss << "(if";
+    for (const auto &b : branches) {
+        ss << " (" << b.cond->toString() << " ";
+        for (const auto &s : b.body) ss << s->toString() << " ";
+        ss << ")";
+    }
+    if (!elseBody.empty()) {
+        ss << " (else ";
+        for (const auto &s : elseBody) ss << s->toString() << " ";
+        ss << ")";
+    }
     ss << ")";
     return ss.str();
 }
@@ -148,9 +178,41 @@ StmtPtr Parser::parseStatement() {
         ExprPtr e = parseExpression();
         return std::make_unique<ReturnStmt>(std::move(e));
     }
+    if (cur.type == TokenType::TK_IF) {
+        return parseIfStatement();
+    }
     // otherwise expression statement
     ExprPtr e = parseExpression();
     return std::make_unique<ExprStmt>(std::move(e));
+}
+
+StmtPtr Parser::parseIfStatement() {
+    expect(TokenType::TK_IF, "expected 'if'");
+
+    ExprPtr cond = parseExpression();
+    expect(TokenType::TK_COLON, "expected ':' after if condition");
+    expect(TokenType::TK_NEWLINE, "expected newline after ':'");
+
+    std::vector<IfBranch> branches;
+    branches.emplace_back(std::move(cond), parseBlock());
+
+    while (cur.type == TokenType::TK_ELIF) {
+        advance();
+        ExprPtr elifCond = parseExpression();
+        expect(TokenType::TK_COLON, "expected ':' after elif condition");
+        expect(TokenType::TK_NEWLINE, "expected newline after ':'");
+        branches.emplace_back(std::move(elifCond), parseBlock());
+    }
+
+    std::vector<StmtPtr> elseBody;
+    if (cur.type == TokenType::TK_ELSE) {
+        advance();
+        expect(TokenType::TK_COLON, "expected ':' after else");
+        expect(TokenType::TK_NEWLINE, "expected newline after ':'");
+        elseBody = parseBlock();
+    }
+
+    return std::make_unique<IfStmt>(std::move(branches), std::move(elseBody));
 }
 
 std::vector<StmtPtr> Parser::parseBlock() {
@@ -166,9 +228,55 @@ std::vector<StmtPtr> Parser::parseBlock() {
 }
 
 ExprPtr Parser::parseExpression() {
+    return parseLogicalOr();
+}
+
+ExprPtr Parser::parseLogicalOr() {
+    ExprPtr left = parseLogicalAnd();
+    while (cur.type == TokenType::TK_OR) {
+        advance();
+        ExprPtr right = parseLogicalAnd();
+        left = std::make_unique<BinaryExpr>("||" , std::move(left), std::move(right));
+    }
+    return left;
+}
+
+ExprPtr Parser::parseLogicalAnd() {
+    ExprPtr left = parseComparison();
+    while (cur.type == TokenType::TK_AND) {
+        advance();
+        ExprPtr right = parseComparison();
+        left = std::make_unique<BinaryExpr>("&&", std::move(left), std::move(right));
+    }
+    return left;
+}
+
+ExprPtr Parser::parseComparison() {
+    ExprPtr left = parseAddSub();
+    while (cur.type == TokenType::TK_LT  || cur.type == TokenType::TK_GT  ||
+           cur.type == TokenType::TK_LTE || cur.type == TokenType::TK_GTE ||
+           cur.type == TokenType::TK_EQEQ || cur.type == TokenType::TK_NEQ) {
+        std::string op;
+        switch (cur.type) {
+            case TokenType::TK_LT:   op = "<";  break;
+            case TokenType::TK_GT:   op = ">";  break;
+            case TokenType::TK_LTE:  op = "<="; break;
+            case TokenType::TK_GTE:  op = ">="; break;
+            case TokenType::TK_EQEQ: op = "=="; break;
+            case TokenType::TK_NEQ:  op = "!="; break;
+            default: break;
+        }
+        advance();
+        ExprPtr right = parseAddSub();
+        left = std::make_unique<BinaryExpr>(op, std::move(left), std::move(right));
+    }
+    return left;
+}
+
+ExprPtr Parser::parseAddSub() {
     ExprPtr left = parseTerm();
     while (cur.type == TokenType::TK_PLUS || cur.type == TokenType::TK_MINUS) {
-        char op = (cur.type == TokenType::TK_PLUS) ? '+' : '-';
+        std::string op = (cur.type == TokenType::TK_PLUS) ? "+" : "-";
         advance();
         ExprPtr right = parseTerm();
         left = std::make_unique<BinaryExpr>(op, std::move(left), std::move(right));
@@ -177,14 +285,23 @@ ExprPtr Parser::parseExpression() {
 }
 
 ExprPtr Parser::parseTerm() {
-    ExprPtr left = parseFactor();
+    ExprPtr left = parseUnary();
     while (cur.type == TokenType::TK_MUL || cur.type == TokenType::TK_DIV) {
-        char op = (cur.type == TokenType::TK_MUL) ? '*' : '/';
+        std::string op = (cur.type == TokenType::TK_MUL) ? "*" : "/";
         advance();
-        ExprPtr right = parseFactor();
+        ExprPtr right = parseUnary();
         left = std::make_unique<BinaryExpr>(op, std::move(left), std::move(right));
     }
     return left;
+}
+
+ExprPtr Parser::parseUnary() {
+    if (cur.type == TokenType::TK_NOT) {
+        advance();
+        ExprPtr operand = parseUnary();
+        return std::make_unique<UnaryExpr>("!", std::move(operand));
+    }
+    return parseFactor();
 }
 
 ExprPtr Parser::parseFactor() {

@@ -15,11 +15,23 @@ enum class TokenType {
     TK_LET,
     TK_FN,
     TK_RETURN,
+    TK_IF,
+    TK_ELIF,
+    TK_ELSE,
     TK_COLON,
     TK_COMMA,
     TK_INDENT,
     TK_DEDENT,
-    TK_EQ,
+    TK_EQ,       // =
+    TK_EQEQ,    // ==
+    TK_NEQ,     // !=
+    TK_LT,      // <
+    TK_GT,      // >
+    TK_LTE,     // <=
+    TK_GTE,     // >=
+    TK_NOT,     // !
+    TK_AND,     // &&
+    TK_OR,      // ||
     TK_PLUS,
     TK_MINUS,
     TK_MUL,

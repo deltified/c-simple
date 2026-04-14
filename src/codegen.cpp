@@ -35,7 +35,7 @@ std::string Codegen::generate(const std::vector<StmtPtr> &stmts) {
     return ss.str();
 }
 
-std::string Codegen::genStmt(const Stmt *s) {
+std::string Codegen::genStmt(const Stmt *s, int indent) {
     if (auto ls = dynamic_cast<const LetStmt*>(s)) {
         std::ostringstream ss;
         ss << "int " << ls->name << " = " << genExpr(ls->expr.get()) << ";";
@@ -68,6 +68,36 @@ std::string Codegen::genStmt(const Stmt *s) {
         ss << genExpr(es->expr.get()) << ";";
         return ss.str();
     }
+    if (auto is = dynamic_cast<const IfStmt*>(s)) {
+        if (is->branches.empty()) {
+            return std::string("/* invalid if */");
+        }
+
+        std::ostringstream ss;
+        for (size_t i = 0; i < is->branches.size(); ++i) {
+            const auto &branch = is->branches[i];
+            if (i == 0) {
+                ss << "if (" << genTruthExpr(branch.cond.get()) << ") {\n";
+            } else {
+                ss << " else if (" << genTruthExpr(branch.cond.get()) << ") {\n";
+            }
+
+            for (const auto &bs : branch.body) {
+                ss << indentStr(indent + 1) << genStmt(bs.get(), indent + 1) << "\n";
+            }
+            ss << indentStr(indent) << "}";
+        }
+
+        if (!is->elseBody.empty()) {
+            ss << " else {\n";
+            for (const auto &bs : is->elseBody) {
+                ss << indentStr(indent + 1) << genStmt(bs.get(), indent + 1) << "\n";
+            }
+            ss << indentStr(indent) << "}";
+        }
+
+        return ss.str();
+    }
     return std::string("/* unknown stmt */");
 }
 
@@ -93,7 +123,14 @@ std::string Codegen::genExpr(const Expr *e) {
         ss << "(" << genExpr(be->left.get()) << " " << be->op << " " << genExpr(be->right.get()) << ")";
         return ss.str();
     }
+    if (auto ue = dynamic_cast<const UnaryExpr*>(e)) {
+        return std::string("(") + ue->op + genExpr(ue->operand.get()) + ")";
+    }
     return std::string("0");
+}
+
+std::string Codegen::genTruthExpr(const Expr *e) {
+    return std::string("(") + genExpr(e) + " != 0)";
 }
 
 } // namespace csimple

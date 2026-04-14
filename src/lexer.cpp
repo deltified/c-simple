@@ -68,6 +68,9 @@ Token Lexer::lexIdent() {
     if (lex == "let") t.type = TokenType::TK_LET;
     else if (lex == "fn") t.type = TokenType::TK_FN;
     else if (lex == "return") t.type = TokenType::TK_RETURN;
+    else if (lex == "if") t.type = TokenType::TK_IF;
+    else if (lex == "elif") t.type = TokenType::TK_ELIF;
+    else if (lex == "else") t.type = TokenType::TK_ELSE;
     else t.type = TokenType::TK_IDENT;
     return t;
 }
@@ -135,23 +138,46 @@ Token Lexer::next() {
     if (std::isdigit((unsigned char)c)) return lexNumber();
     if (std::isalpha((unsigned char)c) || c == '_') return lexIdent();
 
+    // multi-char and single-char operator tokens
+    Token t;
+    t.line = line;
+
+    // Two-char operators: check before consuming
+    if ((c == '=' || c == '!' || c == '<' || c == '>') && idx + 1 < src.size() && src[idx + 1] == '=') {
+        char first = get();
+        get(); // consume '='
+        if (first == '=') { t.lexeme = "=="; t.value = "=="; t.type = TokenType::TK_EQEQ; return t; }
+        if (first == '!') { t.lexeme = "!="; t.value = "!="; t.type = TokenType::TK_NEQ;  return t; }
+        if (first == '<') { t.lexeme = "<="; t.value = "<="; t.type = TokenType::TK_LTE;  return t; }
+        if (first == '>') { t.lexeme = ">="; t.value = ">="; t.type = TokenType::TK_GTE;  return t; }
+    }
+    if (c == '&' && idx + 1 < src.size() && src[idx + 1] == '&') {
+        get(); get();
+        t.lexeme = "&&"; t.value = "&&"; t.type = TokenType::TK_AND; return t;
+    }
+    if (c == '|' && idx + 1 < src.size() && src[idx + 1] == '|') {
+        get(); get();
+        t.lexeme = "||"; t.value = "||"; t.type = TokenType::TK_OR; return t;
+    }
+
     // single-char tokens
     get();
-    Token t;
     t.lexeme = std::string(1, c);
     t.value = t.lexeme;
-    t.line = line;
     switch (c) {
-        case '+': t.type = TokenType::TK_PLUS; return t;
+        case '+': t.type = TokenType::TK_PLUS;  return t;
         case '-': t.type = TokenType::TK_MINUS; return t;
-        case '*': t.type = TokenType::TK_MUL; return t;
-        case '/': t.type = TokenType::TK_DIV; return t;
-        case '(' : t.type = TokenType::TK_LPAREN; return t;
-        case ')' : t.type = TokenType::TK_RPAREN; return t;
-        case '=' : t.type = TokenType::TK_EQ; return t;
-        case ':' : t.type = TokenType::TK_COLON; return t;
-        case ',' : t.type = TokenType::TK_COMMA; return t;
-        default: t.type = TokenType::TK_UNKNOWN; return t;
+        case '*': t.type = TokenType::TK_MUL;   return t;
+        case '/': t.type = TokenType::TK_DIV;   return t;
+        case '(': t.type = TokenType::TK_LPAREN; return t;
+        case ')': t.type = TokenType::TK_RPAREN; return t;
+        case '=': t.type = TokenType::TK_EQ;    return t;
+        case ':': t.type = TokenType::TK_COLON; return t;
+        case ',': t.type = TokenType::TK_COMMA; return t;
+        case '<': t.type = TokenType::TK_LT;    return t;
+        case '>': t.type = TokenType::TK_GT;    return t;
+        case '!': t.type = TokenType::TK_NOT;   return t;
+        default:  t.type = TokenType::TK_UNKNOWN; return t;
     }
     // unreachable
 }

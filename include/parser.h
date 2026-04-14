@@ -34,10 +34,17 @@ struct CallExpr : Expr {
 };
 
 struct BinaryExpr : Expr {
-    char op;
+    std::string op;
     ExprPtr left;
     ExprPtr right;
-    BinaryExpr(char o, ExprPtr l, ExprPtr r);
+    BinaryExpr(std::string o, ExprPtr l, ExprPtr r);
+    std::string toString() const override;
+};
+
+struct UnaryExpr : Expr {
+    std::string op;
+    ExprPtr operand;
+    UnaryExpr(std::string o, ExprPtr x);
     std::string toString() const override;
 };
 
@@ -75,6 +82,19 @@ struct FunctionStmt : Stmt {
     std::string toString() const override;
 };
 
+struct IfBranch {
+    ExprPtr cond;
+    std::vector<StmtPtr> body;
+    IfBranch(ExprPtr c, std::vector<StmtPtr> b);
+};
+
+struct IfStmt : Stmt {
+    std::vector<IfBranch> branches;
+    std::vector<StmtPtr> elseBody;
+    IfStmt(std::vector<IfBranch> b, std::vector<StmtPtr> e);
+    std::string toString() const override;
+};
+
 class Parser {
 public:
     explicit Parser(const std::string &source);
@@ -90,9 +110,15 @@ private:
     void expect(TokenType t, const char *msg="unexpected token");
 
     StmtPtr parseStatement();
+    StmtPtr parseIfStatement();
     std::vector<StmtPtr> parseBlock();
     ExprPtr parseExpression();
+    ExprPtr parseLogicalOr();
+    ExprPtr parseLogicalAnd();
+    ExprPtr parseComparison();
+    ExprPtr parseAddSub();
     ExprPtr parseTerm();
+    ExprPtr parseUnary();
     ExprPtr parseFactor();
 };
 
