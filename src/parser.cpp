@@ -10,6 +10,19 @@ std::string NumberExpr::toString() const { return value; }
 
 std::string IdentExpr::toString() const { return name; }
 
+CallExpr::CallExpr(std::string c, std::vector<ExprPtr> a)
+    : callee(std::move(c)), args(std::move(a)) {}
+
+std::string CallExpr::toString() const {
+    std::ostringstream ss;
+    ss << "(" << callee;
+    for (size_t i = 0; i < args.size(); ++i) {
+        ss << " " << args[i]->toString();
+    }
+    ss << ")";
+    return ss.str();
+}
+
 BinaryExpr::BinaryExpr(char o, ExprPtr l, ExprPtr r)
     : op(o), left(std::move(l)), right(std::move(r)) {}
 
@@ -183,6 +196,20 @@ ExprPtr Parser::parseFactor() {
     if (cur.type == TokenType::TK_IDENT) {
         std::string n = cur.lexeme;
         advance();
+        // function call: IDENT '(' args ')'
+        if (cur.type == TokenType::TK_LPAREN) {
+            advance();
+            std::vector<ExprPtr> args;
+            if (cur.type != TokenType::TK_RPAREN) {
+                while (true) {
+                    args.push_back(parseExpression());
+                    if (cur.type == TokenType::TK_COMMA) { advance(); continue; }
+                    break;
+                }
+            }
+            expect(TokenType::TK_RPAREN, "expected ')'");
+            return std::make_unique<CallExpr>(n, std::move(args));
+        }
         return std::make_unique<IdentExpr>(n);
     }
     if (cur.type == TokenType::TK_LPAREN) {

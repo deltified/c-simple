@@ -26,6 +26,13 @@ struct IdentExpr : Expr {
     std::string toString() const override;
 };
 
+struct CallExpr : Expr {
+    std::string callee;
+    std::vector<ExprPtr> args;
+    CallExpr(std::string c, std::vector<ExprPtr> a);
+    std::string toString() const override;
+};
+
 struct BinaryExpr : Expr {
     char op;
     ExprPtr left;

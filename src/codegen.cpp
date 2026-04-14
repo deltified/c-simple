@@ -61,6 +61,16 @@ std::string Codegen::genExpr(const Expr *e) {
     if (auto ie = dynamic_cast<const IdentExpr*>(e)) {
         return ie->name;
     }
+    if (auto ce = dynamic_cast<const CallExpr*>(e)) {
+        std::ostringstream ss;
+        ss << ce->callee << "(";
+        for (size_t i = 0; i < ce->args.size(); ++i) {
+            if (i) ss << ", ";
+            ss << genExpr(ce->args[i].get());
+        }
+        ss << ")";
+        return ss.str();
+    }
     if (auto be = dynamic_cast<const BinaryExpr*>(e)) {
         std::ostringstream ss;
         ss << "(" << genExpr(be->left.get()) << " " << be->op << " " << genExpr(be->right.get()) << ")";
