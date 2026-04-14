@@ -2,6 +2,7 @@
 #include <fstream>
 #include <sstream>
 #include "lexer.h"
+#include "parser.h"
 
 using namespace csimple;
 
@@ -41,12 +42,25 @@ int main(int argc, char **argv) {
     }
 
     Lexer L(input);
+
+    // Always print tokens
     while(true) {
         Token t = L.next();
         std::cout << getTokenTypeStr(t.type) << "\t" << t.lexeme;
-            if (!t.value.empty()) std::cout << "\t" << t.value;
+        if (!t.value.empty()) std::cout << "\t" << t.value;
         std::cout << "\t(line=" << t.line << ")\n";
         if (t.type == TokenType::TK_EOF) break;
+    }
+
+    // Also run parser and print AST
+    Parser P(input);
+    try {
+        auto stmts = P.parseProgram();
+        std::cout << "--- AST ---\n";
+        for (auto &s : stmts) std::cout << s->toString() << "\n";
+    } catch (const std::exception &ex) {
+        std::cerr << "Parse error: " << ex.what() << "\n";
+        return 2;
     }
     return 0;
 }
