@@ -235,12 +235,31 @@ StmtPtr Parser::parseStatement() {
     if (cur.type == TokenType::TK_WHILE) {
         return parseWhileStatement();
     }
-    if (cur.type == TokenType::TK_IDENT && nxt.type == TokenType::TK_EQ) {
+
+    if (cur.type == TokenType::TK_IDENT) {
         std::string name = cur.lexeme;
-        advance();
-        expect(TokenType::TK_EQ, "expected '=' in assignment");
-        ExprPtr e = parseExpression();
-        return std::make_unique<AssignStmt>(name, std::move(e));
+        if (nxt.type == TokenType::TK_EQ) {
+            advance();
+            expect(TokenType::TK_EQ, "expected '=' in assignment");
+            ExprPtr e = parseExpression();
+            return std::make_unique<AssignStmt>(name, std::move(e));
+        }
+        if (nxt.type == TokenType::TK_PLUSEQ || nxt.type == TokenType::TK_MINUSEQ ||
+            nxt.type == TokenType::TK_MULEQ || nxt.type == TokenType::TK_DIVEQ) {
+            std::string op;
+            switch (nxt.type) {
+                case TokenType::TK_PLUSEQ:  op = "+"; break;
+                case TokenType::TK_MINUSEQ: op = "-"; break;
+                case TokenType::TK_MULEQ:   op = "*"; break;
+                case TokenType::TK_DIVEQ:   op = "/"; break;
+                default: break;
+            }
+            advance();
+            advance();
+            ExprPtr rhs = parseExpression();
+            return std::make_unique<AssignStmt>(name,
+                std::make_unique<BinaryExpr>(op, std::make_unique<IdentExpr>(name), std::move(rhs)));
+        }
     }
     // otherwise expression statement
     ExprPtr e = parseExpression();
@@ -371,6 +390,16 @@ ExprPtr Parser::parseUnary() {
         ExprPtr operand = parseUnary();
         return std::make_unique<UnaryExpr>("!", std::move(operand));
     }
+    if (cur.type == TokenType::TK_PLUSPLUS || cur.type == TokenType::TK_MINUSMINUS) {
+        std::string op = (cur.type == TokenType::TK_PLUSPLUS) ? "++" : "--";
+        advance();
+        if (cur.type != TokenType::TK_IDENT) {
+            throw std::runtime_error("expected identifier after increment/decrement operator");
+        }
+        std::string name = cur.lexeme;
+        advance();
+        return std::make_unique<UnaryExpr>(op, std::make_unique<IdentExpr>(name));
+    }
     return parseFactor();
 }
 
@@ -410,7 +439,13 @@ ExprPtr Parser::parseFactor() {
             expect(TokenType::TK_RPAREN, "expected ')'");
             return std::make_unique<CallExpr>(n, std::move(args));
         }
-        return std::make_unique<IdentExpr>(n);
+        ExprPtr expr = std::make_unique<IdentExpr>(n);
+        if (cur.type == TokenType::TK_PLUSPLUS || cur.type == TokenType::TK_MINUSMINUS) {
+            std::string op = (cur.type == TokenType::TK_PLUSPLUS) ? "post++" : "post--";
+            advance();
+            return std::make_unique<UnaryExpr>(op, std::move(expr));
+        }
+        return expr;
     }
     if (cur.type == TokenType::TK_LPAREN) {
         advance();

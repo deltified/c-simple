@@ -187,6 +187,54 @@ Token Lexer::next() {
     t.line = line;
 
     // Two-char operators: check before consuming
+    if (c == '+' && idx + 1 < src.size() && src[idx + 1] == '+') {
+        get();
+        get();
+        t.lexeme = "++";
+        t.value = "++";
+        t.type = TokenType::TK_PLUSPLUS;
+        return t;
+    }
+    if (c == '-' && idx + 1 < src.size() && src[idx + 1] == '-') {
+        get();
+        get();
+        t.lexeme = "--";
+        t.value = "--";
+        t.type = TokenType::TK_MINUSMINUS;
+        return t;
+    }
+    if (c == '+' && idx + 1 < src.size() && src[idx + 1] == '=') {
+        get();
+        get();
+        t.lexeme = "+=";
+        t.value = "+=";
+        t.type = TokenType::TK_PLUSEQ;
+        return t;
+    }
+    if (c == '-' && idx + 1 < src.size() && src[idx + 1] == '=') {
+        get();
+        get();
+        t.lexeme = "-=";
+        t.value = "-=";
+        t.type = TokenType::TK_MINUSEQ;
+        return t;
+    }
+    if (c == '*' && idx + 1 < src.size() && src[idx + 1] == '=') {
+        get();
+        get();
+        t.lexeme = "*=";
+        t.value = "*=";
+        t.type = TokenType::TK_MULEQ;
+        return t;
+    }
+    if (c == '/' && idx + 1 < src.size() && src[idx + 1] == '=') {
+        get();
+        get();
+        t.lexeme = "/=";
+        t.value = "/=";
+        t.type = TokenType::TK_DIVEQ;
+        return t;
+    }
     if (c == '-' && idx + 1 < src.size() && src[idx + 1] == '>') {
         get();
         get();

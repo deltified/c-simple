@@ -261,6 +261,16 @@ std::string Codegen::genExpr(const Expr *e) {
             }
             throw std::runtime_error("unsupported unary operator for string expression");
         }
+        if (ue->op == "++" || ue->op == "--" || ue->op == "post++" || ue->op == "post--") {
+            auto ident = dynamic_cast<const IdentExpr*>(ue->operand.get());
+            if (!ident) {
+                throw std::runtime_error("increment/decrement operators require an identifier");
+            }
+            if (ue->op == "++") return std::string("(++") + ident->name + ")";
+            if (ue->op == "--") return std::string("(--") + ident->name + ")";
+            if (ue->op == "post++") return std::string("(") + ident->name + "++)";
+            return std::string("(") + ident->name + "--)";
+        }
         return std::string("(") + ue->op + genExpr(ue->operand.get()) + ")";
     }
     return std::string("0");
@@ -280,6 +290,16 @@ ValueType Codegen::inferType(const Expr *e) {
     if (auto ie = dynamic_cast<const IdentExpr*>(e)) return lookupType(ie->name);
     if (auto ue = dynamic_cast<const UnaryExpr*>(e)) {
         if (ue->op == "!") return ValueType::VT_BOOL;
+        if (ue->op == "++" || ue->op == "--" || ue->op == "post++" || ue->op == "post--") {
+            ValueType operandType = inferType(ue->operand.get());
+            if (operandType != ValueType::VT_INT) {
+                throw std::runtime_error("increment/decrement operators require an int operand");
+            }
+            if (!dynamic_cast<const IdentExpr*>(ue->operand.get())) {
+                throw std::runtime_error("increment/decrement operators require an identifier");
+            }
+            return ValueType::VT_INT;
+        }
         return ValueType::VT_INT;
     }
     if (auto ce = dynamic_cast<const CallExpr*>(e)) return lookupFunction(ce->callee).returnType;
