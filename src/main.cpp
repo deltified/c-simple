@@ -1,91 +1,145 @@
-#include <iostream>
+#include <cstdlib>
+#include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <sstream>
-#include "lexer.h"
+#include <stdexcept>
+#include <string>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <vector>
 #include "parser.h"
 #include "codegen.h"
 
 using namespace csimple;
+namespace fs = std::filesystem;
 
 static std::string readFile(const std::string &path) {
     std::ifstream in(path);
+    if (!in) {
+        throw std::runtime_error("failed to open input file '" + path + "'");
+    }
     std::ostringstream ss;
     ss << in.rdbuf();
     return ss.str();
 }
 
-static std::string getTokenTypeStr(TokenType t) {
-    switch (t) {
-        case TokenType::TK_EOF:     return "EOF";
-        case TokenType::TK_NEWLINE: return "NEWLINE";
-        case TokenType::TK_NUMBER:  return "NUMBER";
-        case TokenType::TK_STRING:  return "STRING";
-        case TokenType::TK_IDENT:   return "IDENT";
-        case TokenType::TK_LET:     return "LET";
-        case TokenType::TK_FN:      return "FN";
-        case TokenType::TK_RETURN:  return "RETURN";
-        case TokenType::TK_IF:      return "IF";
-        case TokenType::TK_ELIF:    return "ELIF";
-        case TokenType::TK_ELSE:    return "ELSE";
-        case TokenType::TK_COLON:   return "COLON";
-        case TokenType::TK_COMMA:   return "COMMA";
-        case TokenType::TK_INDENT:  return "INDENT";
-        case TokenType::TK_DEDENT:  return "DEDENT";
-        case TokenType::TK_EQ:      return "EQ";
-        case TokenType::TK_ARROW:   return "ARROW";
-        case TokenType::TK_EQEQ:   return "EQEQ";
-        case TokenType::TK_NEQ:     return "NEQ";
-        case TokenType::TK_LT:      return "LT";
-        case TokenType::TK_GT:      return "GT";
-        case TokenType::TK_LTE:     return "LTE";
-        case TokenType::TK_GTE:     return "GTE";
-        case TokenType::TK_NOT:     return "NOT";
-        case TokenType::TK_AND:     return "AND";
-        case TokenType::TK_OR:      return "OR";
-        case TokenType::TK_PLUS:    return "PLUS";
-        case TokenType::TK_MINUS:   return "MINUS";
-        case TokenType::TK_MUL:     return "MUL";
-        case TokenType::TK_DIV:     return "DIV";
-        case TokenType::TK_LPAREN:  return "LPAREN";
-        case TokenType::TK_RPAREN:  return "RPAREN";
-        case TokenType::TK_UNKNOWN: return "UNKNOWN";
+static void writeFile(const fs::path &path, const std::string &content) {
+    std::ofstream out(path);
+    if (!out) {
+        throw std::runtime_error("failed to write '" + path.string() + "'");
     }
-    return "?";
+    out << content;
+    if (!out) {
+        throw std::runtime_error("failed to write '" + path.string() + "'");
+    }
 }
+
+static int runProcess(const std::vector<std::string> &args) {
+    if (args.empty()) {
+        throw std::runtime_error("cannot run an empty command");
+    }
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        throw std::runtime_error("failed to fork");
+    }
+    if (pid == 0) {
+        std::vector<char *> argv;
+        argv.reserve(args.size() + 1);
+        for (const auto &arg : args) {
+            argv.push_back(const_cast<char *>(arg.c_str()));
+        }
+        argv.push_back(nullptr);
+        execvp(argv[0], argv.data());
+        _exit(127);
+    }
+
+    int status = 0;
+    while (true) {
+        if (waitpid(pid, &status, 0) >= 0) {
+            break;
+        }
+    }
+
+    if (WIFEXITED(status)) {
+        return WEXITSTATUS(status);
+    }
+    if (WIFSIGNALED(status)) {
+        return 128 + WTERMSIG(status);
+    }
+    return 1;
+}
+
+struct TempDir {
+    fs::path path;
+
+    TempDir() {
+        char pattern[] = "/tmp/csimple-XXXXXX";
+        char *created = mkdtemp(pattern);
+        if (!created) {
+            throw std::runtime_error("failed to create temporary directory");
+        }
+        path = created;
+    }
+
+    ~TempDir() {
+        std::error_code ec;
+        fs::remove_all(path, ec);
+    }
+};
 
 int main(int argc, char **argv) {
     std::string input;
-    if (argc > 1) input = readFile(argv[1]);
-    else {
-        std::ostringstream ss;
-        ss << std::cin.rdbuf();
-        input = ss.str();
+    std::string inputPath;
+    bool emitC = false;
+
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--emit-c") {
+            emitC = true;
+            continue;
+        }
+        if (inputPath.empty()) {
+            inputPath = arg;
+            continue;
+        }
+        std::cerr << "unexpected argument: " << arg << "\n";
+        return 1;
     }
 
-    Lexer L(input);
-
-    // Always print tokens
-    while(true) {
-        Token t = L.next();
-        std::cout << getTokenTypeStr(t.type) << "\t" << t.lexeme;
-        if (!t.value.empty()) std::cout << "\t" << t.value;
-        std::cout << "\t(line=" << t.line << ")\n";
-        if (t.type == TokenType::TK_EOF) break;
-    }
-
-    // Also run parser and print AST
-    Parser P(input);
     try {
+        if (!inputPath.empty()) {
+            input = readFile(inputPath);
+        } else {
+            std::ostringstream ss;
+            ss << std::cin.rdbuf();
+            input = ss.str();
+        }
+
+        Parser P(input);
         auto stmts = P.parseProgram();
-        std::cout << "--- AST ---\n";
-        for (auto &s : stmts) std::cout << s->toString() << "\n";
-        // generate C code
         Codegen cg;
         std::string csrc = cg.generate(stmts);
-        std::cout << "--- C ---\n" << csrc;
+
+        if (emitC) {
+            std::cout << csrc;
+            return 0;
+        }
+
+        TempDir tempDir;
+        fs::path cPath = tempDir.path / "program.c";
+        fs::path exePath = tempDir.path / "program";
+        writeFile(cPath, csrc);
+
+        int compileStatus = runProcess({"cc", "-std=c11", "-O2", cPath.string(), "-o", exePath.string()});
+        if (compileStatus != 0) {
+            return compileStatus;
+        }
+
+        return runProcess({exePath.string()});
     } catch (const std::exception &ex) {
-        std::cerr << "Parse error: " << ex.what() << "\n";
+        std::cerr << ex.what() << "\n";
         return 2;
     }
-    return 0;
 }
