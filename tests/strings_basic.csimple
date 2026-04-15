@@ -1,0 +1,27 @@
+let greet = "hello"
+let who = "world"
+let msg = greet + ", " + who
+print(msg)
+
+msg = msg + "!"
+print(msg)
+
+let empty = ""
+if empty:
+    print("unexpected")
+else:
+    print("empty-is-false")
+
+if msg == "hello, world!":
+    print("eq-ok")
+
+if msg != "x":
+    print("neq-ok")
+
+let a = "A"
+a = a + "B"
+a = a + "C"
+print(a)
+
+let n = 42
+print("n=", n, msg)

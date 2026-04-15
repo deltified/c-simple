@@ -19,6 +19,7 @@ static std::string getTokenTypeStr(TokenType t) {
         case TokenType::TK_EOF:     return "EOF";
         case TokenType::TK_NEWLINE: return "NEWLINE";
         case TokenType::TK_NUMBER:  return "NUMBER";
+        case TokenType::TK_STRING:  return "STRING";
         case TokenType::TK_IDENT:   return "IDENT";
         case TokenType::TK_LET:     return "LET";
         case TokenType::TK_FN:      return "FN";

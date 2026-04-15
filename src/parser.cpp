@@ -8,6 +8,8 @@ namespace csimple {
 
 std::string NumberExpr::toString() const { return value; }
 
+std::string StringExpr::toString() const { return std::string("\"") + value + "\""; }
+
 std::string IdentExpr::toString() const { return name; }
 
 CallExpr::CallExpr(std::string c, std::vector<ExprPtr> a)
@@ -44,6 +46,14 @@ LetStmt::LetStmt(std::string n, ExprPtr e) : name(std::move(n)), expr(std::move(
 std::string LetStmt::toString() const {
     std::ostringstream ss;
     ss << "(let " << name << " " << expr->toString() << ")";
+    return ss.str();
+}
+
+AssignStmt::AssignStmt(std::string n, ExprPtr e) : name(std::move(n)), expr(std::move(e)) {}
+
+std::string AssignStmt::toString() const {
+    std::ostringstream ss;
+    ss << "(assign " << name << " " << expr->toString() << ")";
     return ss.str();
 }
 
@@ -97,11 +107,13 @@ std::string IfStmt::toString() const {
 // Parser
 
 Parser::Parser(const std::string &source) : L(source) {
-    advance();
+    cur = L.next();
+    nxt = L.next();
 }
 
 void Parser::advance() {
-    cur = L.next();
+    cur = nxt;
+    nxt = L.next();
 }
 
 bool Parser::accept(TokenType t) {
@@ -180,6 +192,13 @@ StmtPtr Parser::parseStatement() {
     }
     if (cur.type == TokenType::TK_IF) {
         return parseIfStatement();
+    }
+    if (cur.type == TokenType::TK_IDENT && nxt.type == TokenType::TK_EQ) {
+        std::string name = cur.lexeme;
+        advance();
+        expect(TokenType::TK_EQ, "expected '=' in assignment");
+        ExprPtr e = parseExpression();
+        return std::make_unique<AssignStmt>(name, std::move(e));
     }
     // otherwise expression statement
     ExprPtr e = parseExpression();
@@ -309,6 +328,11 @@ ExprPtr Parser::parseFactor() {
         std::string v = cur.value;
         advance();
         return std::make_unique<NumberExpr>(v);
+    }
+    if (cur.type == TokenType::TK_STRING) {
+        std::string v = cur.value;
+        advance();
+        return std::make_unique<StringExpr>(v);
     }
     if (cur.type == TokenType::TK_IDENT) {
         std::string n = cur.lexeme;

@@ -11,6 +11,7 @@ enum class TokenType {
     TK_EOF,
     TK_NEWLINE,
     TK_NUMBER,
+    TK_STRING,
     TK_IDENT,
     TK_LET,
     TK_FN,
@@ -64,6 +65,7 @@ private:
     char get();
     void skipWhitespace();
     Token lexNumber();
+    Token lexString();
     Token lexIdent();
 };
 

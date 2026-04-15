@@ -2,6 +2,7 @@
 #include <cctype>
 #include <cstdlib>
 #include <deque>
+#include <stdexcept>
 
 namespace csimple {
 
@@ -49,6 +50,45 @@ Token Lexer::lexNumber() {
     t.lexeme = lex;
     t.value = lex;
     t.line = line;
+    return t;
+}
+
+Token Lexer::lexString() {
+    Token t;
+    t.type = TokenType::TK_STRING;
+    t.line = line;
+
+    get(); // opening quote
+    std::string decoded;
+    while (true) {
+        char c = get();
+        if (c == '\0') {
+            throw std::runtime_error("unterminated string literal");
+        }
+        if (c == '\n') {
+            throw std::runtime_error("newline in string literal");
+        }
+        if (c == '"') {
+            break;
+        }
+        if (c == '\\') {
+            char esc = get();
+            if (esc == '\0') throw std::runtime_error("unterminated string escape");
+            switch (esc) {
+                case 'n': decoded.push_back('\n'); break;
+                case 't': decoded.push_back('\t'); break;
+                case 'r': decoded.push_back('\r'); break;
+                case '"': decoded.push_back('"'); break;
+                case '\\': decoded.push_back('\\'); break;
+                default: decoded.push_back(esc); break;
+            }
+            continue;
+        }
+        decoded.push_back(c);
+    }
+
+    t.lexeme = std::string("\"") + decoded + "\"";
+    t.value = decoded;
     return t;
 }
 
@@ -136,6 +176,7 @@ Token Lexer::next() {
     }
 
     if (std::isdigit((unsigned char)c)) return lexNumber();
+    if (c == '"') return lexString();
     if (std::isalpha((unsigned char)c) || c == '_') return lexIdent();
 
     // multi-char and single-char operator tokens

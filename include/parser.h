@@ -20,6 +20,12 @@ struct NumberExpr : Expr {
     std::string toString() const override;
 };
 
+struct StringExpr : Expr {
+    std::string value;
+    explicit StringExpr(std::string v) : value(std::move(v)) {}
+    std::string toString() const override;
+};
+
 struct IdentExpr : Expr {
     std::string name;
     explicit IdentExpr(std::string n) : name(std::move(n)) {}
@@ -59,6 +65,13 @@ struct LetStmt : Stmt {
     std::string name;
     ExprPtr expr;
     LetStmt(std::string n, ExprPtr e);
+    std::string toString() const override;
+};
+
+struct AssignStmt : Stmt {
+    std::string name;
+    ExprPtr expr;
+    AssignStmt(std::string n, ExprPtr e);
     std::string toString() const override;
 };
 
@@ -103,6 +116,7 @@ public:
 private:
     Lexer L;
     Token cur;
+    Token nxt;
 
     void advance();
     bool accept(TokenType t);
