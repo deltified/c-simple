@@ -24,6 +24,7 @@ enum class TokenType {
     TK_INDENT,
     TK_DEDENT,
     TK_EQ,       // =
+    TK_ARROW,    // ->
     TK_EQEQ,    // ==
     TK_NEQ,     // !=
     TK_LT,      // <

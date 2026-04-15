@@ -65,17 +65,21 @@ ReturnStmt::ReturnStmt(ExprPtr e) : expr(std::move(e)) {}
 
 std::string ReturnStmt::toString() const { return std::string("(return ") + expr->toString() + ")"; }
 
-FunctionStmt::FunctionStmt(std::string n, std::vector<std::string> p, std::vector<StmtPtr> b)
-    : name(std::move(n)), params(std::move(p)), body(std::move(b)) {}
+FunctionStmt::FunctionStmt(std::string n, ValueType r, std::vector<ParamDecl> p, std::vector<StmtPtr> b)
+    : name(std::move(n)), returnType(r), params(std::move(p)), body(std::move(b)) {}
 
 std::string FunctionStmt::toString() const {
     std::ostringstream ss;
+    auto typeToString = [](ValueType t) {
+        return t == ValueType::VT_STRING ? std::string("str") : std::string("int");
+    };
+
     ss << "(fn " << name << " (";
     for (size_t i = 0; i < params.size(); ++i) {
         if (i) ss << " ";
-        ss << params[i];
+        ss << typeToString(params[i].type) << " " << params[i].name;
     }
-    ss << ") ";
+    ss << ") -> " << typeToString(returnType) << " ";
     for (auto &s : body) ss << s->toString() << " ";
     ss << ")";
     return ss.str();
@@ -141,6 +145,21 @@ void Parser::expect(TokenType t, const char *msg) {
     advance();
 }
 
+ValueType Parser::parseTypeName() {
+    if (cur.type != TokenType::TK_IDENT) {
+        throw std::runtime_error("expected type name");
+    }
+    if (cur.lexeme == "int") {
+        advance();
+        return ValueType::VT_INT;
+    }
+    if (cur.lexeme == "str") {
+        advance();
+        return ValueType::VT_STRING;
+    }
+    throw std::runtime_error("unknown type name '" + cur.lexeme + "'");
+}
+
 std::vector<StmtPtr> Parser::parseProgram() {
     std::vector<StmtPtr> out;
     while (cur.type != TokenType::TK_EOF) {
@@ -168,22 +187,25 @@ StmtPtr Parser::parseStatement() {
         std::string name = cur.lexeme;
         advance();
         expect(TokenType::TK_LPAREN, "expected '('");
-        std::vector<std::string> params;
+        std::vector<ParamDecl> params;
         if (cur.type != TokenType::TK_RPAREN) {
             while (true) {
-                if (cur.type != TokenType::TK_IDENT) throw std::runtime_error("expected parameter name");
-                params.push_back(cur.lexeme);
+                ValueType paramType = parseTypeName();
+                if (cur.type != TokenType::TK_IDENT) throw std::runtime_error("expected parameter name after type annotation");
+                params.push_back(ParamDecl{paramType, cur.lexeme});
                 advance();
                 if (cur.type == TokenType::TK_COMMA) { advance(); continue; }
                 break;
             }
         }
         expect(TokenType::TK_RPAREN, "expected ')'");
+        expect(TokenType::TK_ARROW, "expected '->' after function parameters");
+        ValueType returnType = parseTypeName();
         expect(TokenType::TK_COLON, "expected ':' after function signature");
         // require newline then indented block
         expect(TokenType::TK_NEWLINE, "expected newline after ':'");
         std::vector<StmtPtr> body = parseBlock();
-        return std::make_unique<FunctionStmt>(name, std::move(params), std::move(body));
+        return std::make_unique<FunctionStmt>(name, returnType, std::move(params), std::move(body));
     }
     if (cur.type == TokenType::TK_RETURN) {
         advance();

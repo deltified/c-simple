@@ -184,6 +184,14 @@ Token Lexer::next() {
     t.line = line;
 
     // Two-char operators: check before consuming
+    if (c == '-' && idx + 1 < src.size() && src[idx + 1] == '>') {
+        get();
+        get();
+        t.lexeme = "->";
+        t.value = "->";
+        t.type = TokenType::TK_ARROW;
+        return t;
+    }
     if ((c == '=' || c == '!' || c == '<' || c == '>') && idx + 1 < src.size() && src[idx + 1] == '=') {
         char first = get();
         get(); // consume '='

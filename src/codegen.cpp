@@ -8,39 +8,63 @@ namespace csimple {
 std::string Codegen::generate(const std::vector<StmtPtr> &stmts) {
     std::ostringstream ss;
     scopes.clear();
+    functions.clear();
 
-    ss << runtimePreamble() << "\n";
-
-    // first emit function definitions
+    std::vector<const FunctionStmt*> functionDecls;
     std::vector<const Stmt*> mainStmts;
     for (const auto &s : stmts) {
         if (auto fs = dynamic_cast<const FunctionStmt*>(s.get())) {
-            scopes.push_back({});
-
-            // function signature
-            ss << "int " << fs->name << "(";
-            for (size_t i = 0; i < fs->params.size(); ++i) {
-                if (i) ss << ", ";
-                ss << "int " << fs->params[i];
-                bindType(fs->params[i], ValueType::VT_INT);
-            }
-            ss << ") {\n";
-            for (const auto &bs : fs->body) {
-                ss << indentStr(1) << genStmt(bs.get(), 1) << "\n";
-            }
-            ss << "}\n\n";
-
-            scopes.pop_back();
+            bindFunction(fs);
+            functionDecls.push_back(fs);
         } else {
             mainStmts.push_back(s.get());
         }
     }
 
-    scopes.push_back({});
+    ss << runtimePreamble() << "\n";
+
+    for (const auto *fs : functionDecls) {
+        ss << typeToCString(fs->returnType) << " " << fs->name << "(";
+        for (size_t i = 0; i < fs->params.size(); ++i) {
+            if (i) ss << ", ";
+            ss << typeToCString(fs->params[i].type) << " " << fs->params[i].name;
+        }
+        ss << ");\n";
+    }
+
+    if (!functionDecls.empty()) {
+        ss << "\n";
+    }
+
+    for (const auto *fs : functionDecls) {
+        scopes.push_back({});
+        currentReturnType = fs->returnType;
+        hasCurrentReturnType = true;
+        for (const auto &param : fs->params) {
+            bindType(param.name, param.type);
+        }
+
+        ss << typeToCString(fs->returnType) << " " << fs->name << "(";
+        for (size_t i = 0; i < fs->params.size(); ++i) {
+            if (i) ss << ", ";
+            ss << typeToCString(fs->params[i].type) << " " << fs->params[i].name;
+        }
+        ss << ") {\n";
+        for (const auto &bs : fs->body) {
+            ss << indentStr(1) << genStmt(bs.get(), 1) << "\n";
+        }
+        ss << "}\n\n";
+
+        scopes.pop_back();
+        hasCurrentReturnType = false;
+        currentReturnType = ValueType::VT_INT;
+    }
+
     ss << "int main(void) {\n";
+    scopes.push_back({});
     for (const Stmt *s : mainStmts) {
         ss << indentStr(1) << genStmt(s, 1) << "\n";
-    }
+        }
     ss << "    return 0;\n";
     ss << "}\n";
     scopes.pop_back();
@@ -91,8 +115,12 @@ std::string Codegen::genStmt(const Stmt *s, int indent) {
         return ss.str();
     }
     if (auto rs = dynamic_cast<const ReturnStmt*>(s)) {
-        if (inferType(rs->expr.get()) == ValueType::VT_STRING) {
-            throw std::runtime_error("string return values are not supported yet");
+        if (!hasCurrentReturnType) {
+            throw std::runtime_error("return statement is only allowed inside functions");
+        }
+        ValueType exprType = inferType(rs->expr.get());
+        if (exprType != currentReturnType) {
+            throw std::runtime_error("return type does not match function signature");
         }
         std::ostringstream ss;
         ss << "return " << genExpr(rs->expr.get()) << ";";
@@ -173,6 +201,18 @@ std::string Codegen::genExpr(const Expr *e) {
         return ie->name;
     }
     if (auto ce = dynamic_cast<const CallExpr*>(e)) {
+        const FunctionSig &sig = lookupFunction(ce->callee);
+        if (sig.paramTypes.size() != ce->args.size()) {
+            throw std::runtime_error("argument count mismatch in call to '" + ce->callee + "'");
+        }
+
+        for (size_t i = 0; i < ce->args.size(); ++i) {
+            ValueType argType = inferType(ce->args[i].get());
+            if (argType != sig.paramTypes[i]) {
+                throw std::runtime_error("argument type mismatch in call to '" + ce->callee + "'");
+            }
+        }
+
         std::ostringstream ss;
         ss << ce->callee << "(";
         for (size_t i = 0; i < ce->args.size(); ++i) {
@@ -230,7 +270,7 @@ ValueType Codegen::inferType(const Expr *e) {
     if (dynamic_cast<const StringExpr*>(e)) return ValueType::VT_STRING;
     if (auto ie = dynamic_cast<const IdentExpr*>(e)) return lookupType(ie->name);
     if (dynamic_cast<const UnaryExpr*>(e)) return ValueType::VT_INT;
-    if (dynamic_cast<const CallExpr*>(e)) return ValueType::VT_INT;
+    if (auto ce = dynamic_cast<const CallExpr*>(e)) return lookupFunction(ce->callee).returnType;
 
     if (auto be = dynamic_cast<const BinaryExpr*>(e)) {
         ValueType lt = inferType(be->left.get());
@@ -276,9 +316,27 @@ ValueType Codegen::lookupType(const std::string &name) const {
     return ValueType::VT_INT;
 }
 
+const FunctionSig &Codegen::lookupFunction(const std::string &name) const {
+    auto it = functions.find(name);
+    if (it == functions.end()) {
+        throw std::runtime_error("unknown function '" + name + "'");
+    }
+    return it->second;
+}
+
 void Codegen::bindType(const std::string &name, ValueType t) {
     if (scopes.empty()) scopes.push_back({});
     scopes.back()[name] = t;
+}
+
+void Codegen::bindFunction(const FunctionStmt *fn) {
+    FunctionSig sig;
+    sig.returnType = fn->returnType;
+    sig.paramTypes.reserve(fn->params.size());
+    for (const auto &param : fn->params) {
+        sig.paramTypes.push_back(param.type);
+    }
+    functions[fn->name] = std::move(sig);
 }
 
 std::string Codegen::escapeCString(const std::string &raw) {
@@ -376,6 +434,10 @@ std::string Codegen::runtimePreamble() {
         "    return memcmp(a.data, b.data, (size_t)a.len) == 0;\n"
         "}\n"
     );
+}
+
+std::string Codegen::typeToCString(ValueType t) {
+    return t == ValueType::VT_STRING ? std::string("cs_string") : std::string("int");
 }
 
 } // namespace csimple

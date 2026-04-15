@@ -25,3 +25,12 @@ print(a)
 
 let n = 42
 print("n=", n, msg)
+
+
+fn combine(str a, str b) -> str:
+    return a + b
+
+let s1 = "ee"
+let s2 = "aa"
+let s3 = combine(s1, s2)
+print(s3)

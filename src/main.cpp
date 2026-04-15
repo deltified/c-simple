@@ -32,6 +32,7 @@ static std::string getTokenTypeStr(TokenType t) {
         case TokenType::TK_INDENT:  return "INDENT";
         case TokenType::TK_DEDENT:  return "DEDENT";
         case TokenType::TK_EQ:      return "EQ";
+        case TokenType::TK_ARROW:   return "ARROW";
         case TokenType::TK_EQEQ:   return "EQEQ";
         case TokenType::TK_NEQ:     return "NEQ";
         case TokenType::TK_LT:      return "LT";

@@ -7,6 +7,16 @@
 
 namespace csimple {
 
+enum class ValueType {
+    VT_INT,
+    VT_STRING,
+};
+
+struct ParamDecl {
+    ValueType type;
+    std::string name;
+};
+
 struct Expr {
     virtual ~Expr() = default;
     virtual std::string toString() const = 0;
@@ -89,9 +99,10 @@ struct ReturnStmt : Stmt {
 
 struct FunctionStmt : Stmt {
     std::string name;
-    std::vector<std::string> params;
+    ValueType returnType;
+    std::vector<ParamDecl> params;
     std::vector<StmtPtr> body;
-    FunctionStmt(std::string n, std::vector<std::string> p, std::vector<StmtPtr> b);
+    FunctionStmt(std::string n, ValueType r, std::vector<ParamDecl> p, std::vector<StmtPtr> b);
     std::string toString() const override;
 };
 
@@ -125,6 +136,7 @@ private:
 
     StmtPtr parseStatement();
     StmtPtr parseIfStatement();
+    ValueType parseTypeName();
     std::vector<StmtPtr> parseBlock();
     ExprPtr parseExpression();
     ExprPtr parseLogicalOr();
