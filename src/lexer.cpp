@@ -111,6 +111,9 @@ Token Lexer::lexIdent() {
     else if (lex == "if") t.type = TokenType::TK_IF;
     else if (lex == "elif") t.type = TokenType::TK_ELIF;
     else if (lex == "else") t.type = TokenType::TK_ELSE;
+    else if (lex == "while") t.type = TokenType::TK_WHILE;
+    else if (lex == "true") t.type = TokenType::TK_TRUE;
+    else if (lex == "false") t.type = TokenType::TK_FALSE;
     else t.type = TokenType::TK_IDENT;
     return t;
 }

@@ -10,6 +10,7 @@ namespace csimple {
 enum class ValueType {
     VT_INT,
     VT_STRING,
+    VT_BOOL,
 };
 
 struct ParamDecl {
@@ -33,6 +34,12 @@ struct NumberExpr : Expr {
 struct StringExpr : Expr {
     std::string value;
     explicit StringExpr(std::string v) : value(std::move(v)) {}
+    std::string toString() const override;
+};
+
+struct BoolExpr : Expr {
+    bool value;
+    explicit BoolExpr(bool v) : value(v) {}
     std::string toString() const override;
 };
 
@@ -119,6 +126,13 @@ struct IfStmt : Stmt {
     std::string toString() const override;
 };
 
+struct WhileStmt : Stmt {
+    ExprPtr cond;
+    std::vector<StmtPtr> body;
+    WhileStmt(ExprPtr c, std::vector<StmtPtr> b);
+    std::string toString() const override;
+};
+
 class Parser {
 public:
     explicit Parser(const std::string &source);
@@ -136,6 +150,7 @@ private:
 
     StmtPtr parseStatement();
     StmtPtr parseIfStatement();
+    StmtPtr parseWhileStatement();
     ValueType parseTypeName();
     std::vector<StmtPtr> parseBlock();
     ExprPtr parseExpression();

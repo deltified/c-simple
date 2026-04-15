@@ -10,6 +10,8 @@ std::string NumberExpr::toString() const { return value; }
 
 std::string StringExpr::toString() const { return std::string("\"") + value + "\""; }
 
+std::string BoolExpr::toString() const { return value ? "true" : "false"; }
+
 std::string IdentExpr::toString() const { return name; }
 
 CallExpr::CallExpr(std::string c, std::vector<ExprPtr> a)
@@ -108,6 +110,17 @@ std::string IfStmt::toString() const {
     return ss.str();
 }
 
+WhileStmt::WhileStmt(ExprPtr c, std::vector<StmtPtr> b)
+    : cond(std::move(c)), body(std::move(b)) {}
+
+std::string WhileStmt::toString() const {
+    std::ostringstream ss;
+    ss << "(while " << cond->toString() << " ";
+    for (const auto &s : body) ss << s->toString() << " ";
+    ss << ")";
+    return ss.str();
+}
+
 // Parser
 
 Parser::Parser(const std::string &source) : L(source) {
@@ -156,6 +169,10 @@ ValueType Parser::parseTypeName() {
     if (cur.lexeme == "str") {
         advance();
         return ValueType::VT_STRING;
+    }
+    if (cur.lexeme == "bool") {
+        advance();
+        return ValueType::VT_BOOL;
     }
     throw std::runtime_error("unknown type name '" + cur.lexeme + "'");
 }
@@ -215,6 +232,9 @@ StmtPtr Parser::parseStatement() {
     if (cur.type == TokenType::TK_IF) {
         return parseIfStatement();
     }
+    if (cur.type == TokenType::TK_WHILE) {
+        return parseWhileStatement();
+    }
     if (cur.type == TokenType::TK_IDENT && nxt.type == TokenType::TK_EQ) {
         std::string name = cur.lexeme;
         advance();
@@ -254,6 +274,15 @@ StmtPtr Parser::parseIfStatement() {
     }
 
     return std::make_unique<IfStmt>(std::move(branches), std::move(elseBody));
+}
+
+StmtPtr Parser::parseWhileStatement() {
+    advance(); // consume 'while'
+    ExprPtr cond = parseExpression();
+    expect(TokenType::TK_COLON, "expected ':' after while condition");
+    expect(TokenType::TK_NEWLINE, "expected newline after ':'");
+    std::vector<StmtPtr> body = parseBlock();
+    return std::make_unique<WhileStmt>(std::move(cond), std::move(body));
 }
 
 std::vector<StmtPtr> Parser::parseBlock() {
@@ -355,6 +384,14 @@ ExprPtr Parser::parseFactor() {
         std::string v = cur.value;
         advance();
         return std::make_unique<StringExpr>(v);
+    }
+    if (cur.type == TokenType::TK_TRUE) {
+        advance();
+        return std::make_unique<BoolExpr>(true);
+    }
+    if (cur.type == TokenType::TK_FALSE) {
+        advance();
+        return std::make_unique<BoolExpr>(false);
     }
     if (cur.type == TokenType::TK_IDENT) {
         std::string n = cur.lexeme;

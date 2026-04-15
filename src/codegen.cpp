@@ -78,11 +78,7 @@ std::string Codegen::genStmt(const Stmt *s, int indent) {
         bindType(ls->name, t);
 
         std::ostringstream ss;
-        if (t == ValueType::VT_STRING) {
-            ss << "cs_string " << ls->name << " = " << genExpr(ls->expr.get()) << ";";
-        } else {
-            ss << "int " << ls->name << " = " << genExpr(ls->expr.get()) << ";";
-        }
+        ss << typeToCString(t) << " " << ls->name << " = " << genExpr(ls->expr.get()) << ";";
         return ss.str();
     }
     if (auto as = dynamic_cast<const AssignStmt*>(s)) {
@@ -92,8 +88,8 @@ std::string Codegen::genStmt(const Stmt *s, int indent) {
         if (targetType == ValueType::VT_STRING && exprType != ValueType::VT_STRING) {
             throw std::runtime_error("cannot assign non-string expression to string variable '" + as->name + "'");
         }
-        if (targetType == ValueType::VT_INT && exprType == ValueType::VT_STRING) {
-            throw std::runtime_error("cannot assign string expression to int variable '" + as->name + "'");
+        if (targetType != ValueType::VT_STRING && exprType == ValueType::VT_STRING) {
+            throw std::runtime_error("cannot assign string expression to non-string variable '" + as->name + "'");
         }
 
         if (targetType == ValueType::VT_STRING) {
@@ -185,6 +181,15 @@ std::string Codegen::genStmt(const Stmt *s, int indent) {
 
         return ss.str();
     }
+    if (auto ws = dynamic_cast<const WhileStmt*>(s)) {
+        std::ostringstream ss;
+        ss << "while (" << genTruthExpr(ws->cond.get()) << ") {\n";
+        for (const auto &bs : ws->body) {
+            ss << indentStr(indent + 1) << genStmt(bs.get(), indent + 1) << "\n";
+        }
+        ss << indentStr(indent) << "}";
+        return ss.str();
+    }
     return std::string("/* unknown stmt */");
 }
 
@@ -196,6 +201,9 @@ std::string Codegen::genExpr(const Expr *e) {
         std::ostringstream ss;
         ss << "cs_string_from_lit(\"" << escapeCString(se->value) << "\", " << se->value.size() << ")";
         return ss.str();
+    }
+    if (auto be = dynamic_cast<const BoolExpr*>(e)) {
+        return be->value ? "true" : "false";
     }
     if (auto ie = dynamic_cast<const IdentExpr*>(e)) {
         return ie->name;
@@ -268,8 +276,12 @@ std::string Codegen::genTruthExpr(const Expr *e) {
 ValueType Codegen::inferType(const Expr *e) {
     if (dynamic_cast<const NumberExpr*>(e)) return ValueType::VT_INT;
     if (dynamic_cast<const StringExpr*>(e)) return ValueType::VT_STRING;
+    if (dynamic_cast<const BoolExpr*>(e)) return ValueType::VT_BOOL;
     if (auto ie = dynamic_cast<const IdentExpr*>(e)) return lookupType(ie->name);
-    if (dynamic_cast<const UnaryExpr*>(e)) return ValueType::VT_INT;
+    if (auto ue = dynamic_cast<const UnaryExpr*>(e)) {
+        if (ue->op == "!") return ValueType::VT_BOOL;
+        return ValueType::VT_INT;
+    }
     if (auto ce = dynamic_cast<const CallExpr*>(e)) return lookupFunction(ce->callee).returnType;
 
     if (auto be = dynamic_cast<const BinaryExpr*>(e)) {
@@ -292,14 +304,18 @@ ValueType Codegen::inferType(const Expr *e) {
                     throw std::runtime_error("string comparison requires both operands to be strings");
                 }
             }
-            return ValueType::VT_INT;
+            return ValueType::VT_BOOL;
         }
 
         if (be->op == "<" || be->op == ">" || be->op == "<=" || be->op == ">=") {
             if (lt == ValueType::VT_STRING || rt == ValueType::VT_STRING) {
                 throw std::runtime_error("ordering comparisons for strings are not supported");
             }
-            return ValueType::VT_INT;
+            return ValueType::VT_BOOL;
+        }
+
+        if (be->op == "&&" || be->op == "||") {
+            return ValueType::VT_BOOL;
         }
 
         return ValueType::VT_INT;
@@ -370,6 +386,7 @@ std::string Codegen::runtimePreamble() {
         "#include <stdio.h>\n"
         "#include <stdlib.h>\n"
         "#include <string.h>\n"
+        "#include <stdbool.h>\n"
         "\n"
         "typedef struct {\n"
         "    char *data;\n"
@@ -437,7 +454,9 @@ std::string Codegen::runtimePreamble() {
 }
 
 std::string Codegen::typeToCString(ValueType t) {
-    return t == ValueType::VT_STRING ? std::string("cs_string") : std::string("int");
+    if (t == ValueType::VT_STRING) return "cs_string";
+    if (t == ValueType::VT_BOOL) return "bool";
+    return "int";
 }
 
 } // namespace csimple

@@ -1,0 +1,21 @@
+let truth = 2
+if truth:
+    print("truthy")
+else:
+    print("falsy")
+
+if 0:
+    print("bad")
+
+let b = true
+b = false
+if b:
+    print("bad boolean")
+
+let v = truth && true
+let f = false || b
+
+if v:
+    print("success")
+if v && f:
+    print("failed f check")
